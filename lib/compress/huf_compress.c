@@ -51,6 +51,10 @@
 #define HUF_STATIC_LINKING_ONLY
 #include "huf.h"
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#include "zstd_internal.h"  /* defaultCustomMem */
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 
 /* **************************************************************
 *  Error Management
@@ -125,8 +129,13 @@ size_t HUF_writeCTable (void* dst, size_t maxDstSize,
 
 size_t HUF_readCTable (HUF_CElt* CTable, U32 maxSymbolValue, const void* src, size_t srcSize)
 {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    BYTE* huffWeight = ZSTD_malloc((HUF_SYMBOLVALUE_MAX + 1) * sizeof(BYTE), customMalloc);
+    U32* rankVal = ZSTD_malloc((HUF_TABLELOG_ABSOLUTEMAX + 1) * sizeof(U32), customMalloc);   /* large enough for values from 0 to 16 */
+#else
     BYTE huffWeight[HUF_SYMBOLVALUE_MAX + 1];
     U32 rankVal[HUF_TABLELOG_ABSOLUTEMAX + 1];   /* large enough for values from 0 to 16 */
+#endif
     U32 tableLog = 0;
     size_t readSize;
     U32 nbSymbols = 0;
@@ -169,6 +178,10 @@ size_t HUF_readCTable (HUF_CElt* CTable, U32 maxSymbolValue, const void* src, si
         { U32 n; for (n=0; n<=maxSymbolValue; n++) CTable[n].val = valPerRank[CTable[n].nbBits]++; }
     }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(huffWeight, customMalloc);
+    ZSTD_free(rankVal, customMalloc);
+#endif
     return readSize;
 }
 
@@ -281,7 +294,11 @@ static void HUF_sort(nodeElt* huffNode, const U32* count, U32 maxSymbolValue)
 #define STARTNODE (HUF_SYMBOLVALUE_MAX+1)
 size_t HUF_buildCTable (HUF_CElt* tree, const U32* count, U32 maxSymbolValue, U32 maxNbBits)
 {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    nodeElt* huffNode0 = ZSTD_malloc((2*HUF_SYMBOLVALUE_MAX+1 +1) * sizeof(nodeElt), customMalloc);
+#else
     nodeElt huffNode0[2*HUF_SYMBOLVALUE_MAX+1 +1];
+#endif
     nodeElt* huffNode = huffNode0 + 1;
     U32 n, nonNullRank;
     int lowS, lowN;
@@ -290,8 +307,17 @@ size_t HUF_buildCTable (HUF_CElt* tree, const U32* count, U32 maxSymbolValue, U3
 
     /* safety checks */
     if (maxNbBits == 0) maxNbBits = HUF_TABLELOG_DEFAULT;
-    if (maxSymbolValue > HUF_SYMBOLVALUE_MAX) return ERROR(GENERIC);
+    if (maxSymbolValue > HUF_SYMBOLVALUE_MAX) {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+        ZSTD_free(huffNode0, customMalloc);
+#endif
+        return ERROR(GENERIC);
+    }
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    memset(huffNode0, 0, (2*HUF_SYMBOLVALUE_MAX+1 +1) * sizeof(nodeElt));
+#else
     memset(huffNode0, 0, sizeof(huffNode0));
+#endif
 
     /* sort, decreasing order */
     HUF_sort(huffNode, count, maxSymbolValue);
@@ -328,7 +354,12 @@ size_t HUF_buildCTable (HUF_CElt* tree, const U32* count, U32 maxSymbolValue, U3
     /* fill result into tree (val, nbBits) */
     {   U16 nbPerRank[HUF_TABLELOG_MAX+1] = {0};
         U16 valPerRank[HUF_TABLELOG_MAX+1] = {0};
-        if (maxNbBits > HUF_TABLELOG_MAX) return ERROR(GENERIC);   /* check fit into table */
+        if (maxNbBits > HUF_TABLELOG_MAX) {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+            ZSTD_free(huffNode0, customMalloc);
+#endif
+            return ERROR(GENERIC);   /* check fit into table */
+        }
         for (n=0; n<=nonNullRank; n++)
             nbPerRank[huffNode[n].nbBits]++;
         /* determine stating value per rank */
@@ -344,6 +375,9 @@ size_t HUF_buildCTable (HUF_CElt* tree, const U32* count, U32 maxSymbolValue, U3
             tree[n].val = valPerRank[tree[n].nbBits]++;   /* assign value within rank, symbol order */
     }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(huffNode0, customMalloc);
+#endif
     return maxNbBits;
 }
 
@@ -462,8 +496,13 @@ static size_t HUF_compress_internal (
     BYTE* const oend = ostart + dstSize;
     BYTE* op = ostart;
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    U32* count = ZSTD_malloc((HUF_SYMBOLVALUE_MAX+1) * sizeof(U32), customMalloc);
+    HUF_CElt* CTable = ZSTD_malloc((HUF_SYMBOLVALUE_MAX+1) * sizeof(HUF_CElt), customMalloc);
+#else
     U32 count[HUF_SYMBOLVALUE_MAX+1];
     HUF_CElt CTable[HUF_SYMBOLVALUE_MAX+1];
+#endif
 
     /* checks & inits */
     if (!srcSize) return 0;  /* Uncompressed (note : 1 means rle, so first byte must be correct) */
@@ -507,6 +546,10 @@ static size_t HUF_compress_internal (
     if ((size_t)(op-ostart) >= srcSize-1)
         return 0;
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(count, customMalloc);
+    ZSTD_free(CTable, customMalloc);
+#endif
     return op-ostart;
 }
 

@@ -560,8 +560,13 @@ size_t ZSTD_compressSequences(ZSTD_CCtx* zc,
                               size_t srcSize)
 {
     const seqStore_t* seqStorePtr = &(zc->seqStore);
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    U32* count = ZSTD_malloc((MaxSeq+1) * sizeof(U32), zc->customMem);
+    S16* norm = ZSTD_malloc((MaxSeq+1) * sizeof(S16), zc->customMem);
+#else
     U32 count[MaxSeq+1];
     S16 norm[MaxSeq+1];
+#endif
     FSE_CTable* CTable_LitLength = zc->litlengthCTable;
     FSE_CTable* CTable_OffsetBits = zc->offcodeCTable;
     FSE_CTable* CTable_MatchLength = zc->matchlengthCTable;
@@ -735,6 +740,10 @@ _check_compressibility:
     /* confirm repcodes */
     { int i; for (i=0; i<ZSTD_REP_NUM; i++) zc->rep[i] = zc->savedRep[i]; }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(count, zc->customMem);
+    ZSTD_free(norm, zc->customMem);
+#endif
     return op - ostart;
 }
 
@@ -2663,11 +2672,17 @@ size_t ZSTD_compressCCtx (ZSTD_CCtx* ctx, void* dst, size_t dstCapacity, const v
 size_t ZSTD_compress(void* dst, size_t dstCapacity, const void* src, size_t srcSize, int compressionLevel)
 {
     size_t result;
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_CCtx* ctxBody = ZSTD_createCCtx();
+    result = ZSTD_compressCCtx(ctxBody, dst, dstCapacity, src, srcSize, compressionLevel);
+    ZSTD_freeCCtx(ctxBody);
+#else
     ZSTD_CCtx ctxBody;
     memset(&ctxBody, 0, sizeof(ctxBody));
     memcpy(&ctxBody.customMem, &defaultCustomMem, sizeof(ZSTD_customMem));
     result = ZSTD_compressCCtx(&ctxBody, dst, dstCapacity, src, srcSize, compressionLevel);
     ZSTD_free(ctxBody.workSpace, defaultCustomMem);  /* can't free ctxBody itself, as it's on stack; free only heap content */
+#endif
     return result;
 }
 

@@ -63,6 +63,10 @@
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#include "zstd_internal.h"  /* defaultCustomMem */
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 
 /* **************************************************************
 *  Error Management
@@ -109,9 +113,16 @@ size_t FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned 
     void* const FSCT = ((U32*)ptr) + 1 /* header */ + (tableLog ? tableSize>>1 : 1) ;
     FSE_symbolCompressionTransform* const symbolTT = (FSE_symbolCompressionTransform*) (FSCT);
     U32 const step = FSE_TABLESTEP(tableSize);
-    U32 cumul[FSE_MAX_SYMBOL_VALUE+2];
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    U32* cumul = ZSTD_malloc(sizeof(U32) * (FSE_MAX_SYMBOL_VALUE+2), customMalloc);
+    FSE_FUNCTION_TYPE* tableSymbol = ZSTD_malloc(sizeof(FSE_FUNCTION_TYPE) * FSE_MAX_TABLESIZE, customMalloc);
+    /* checks */
+    //if (!cumul) return ERROR(memory_allocation);
+#else
+    U32 cumul[FSE_MAX_SYMBOL_VALUE+2];
     FSE_FUNCTION_TYPE tableSymbol[FSE_MAX_TABLESIZE]; /* memset() is not necessary, even if static analyzer complain about it */
+#endif
     U32 highThreshold = tableSize-1;
 
     /* CTable header */
@@ -145,7 +156,13 @@ size_t FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned 
                 while (position > highThreshold) position = (position + step) & tableMask;   /* Low proba area */
         }   }
 
-        if (position!=0) return ERROR(GENERIC);   /* Must have gone through all positions */
+        if (position!=0) {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+            ZSTD_free(cumul, customMalloc);
+            ZSTD_free(tableSymbol, customMalloc);
+#endif
+            return ERROR(GENERIC);   /* Must have gone through all positions */
+        }
     }
 
     /* Build table */
@@ -176,6 +193,11 @@ size_t FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned 
                     symbolTT[s].deltaFindState = total - normalizedCounter[s];
                     total +=  normalizedCounter[s];
     }   }   }   }
+
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(cumul, customMalloc);
+    ZSTD_free(tableSymbol, customMalloc);
+#endif
 
     return 0;
 }
@@ -338,16 +360,32 @@ static size_t FSE_count_parallel(unsigned* count, unsigned* maxSymbolValuePtr,
     unsigned maxSymbolValue = *maxSymbolValuePtr;
     unsigned max=0;
 
-
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    U32* Counting1 = ZSTD_malloc(256 * sizeof(U32), customMalloc);
+    U32* Counting2 = ZSTD_malloc(256 * sizeof(U32), customMalloc);
+    U32* Counting3 = ZSTD_malloc(256 * sizeof(U32), customMalloc);
+    U32* Counting4 = ZSTD_malloc(256 * sizeof(U32), customMalloc);
+    memset(Counting1, 0, 256 * sizeof(U32));
+    memset(Counting2, 0, 256 * sizeof(U32));
+    memset(Counting3, 0, 256 * sizeof(U32));
+    memset(Counting4, 0, 256 * sizeof(U32));
+#else
     U32 Counting1[256] = { 0 };
     U32 Counting2[256] = { 0 };
     U32 Counting3[256] = { 0 };
     U32 Counting4[256] = { 0 };
+#endif
 
     /* safety checks */
     if (!sourceSize) {
         memset(count, 0, maxSymbolValue + 1);
         *maxSymbolValuePtr = 0;
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+        ZSTD_free(Counting1, customMalloc);
+        ZSTD_free(Counting2, customMalloc);
+        ZSTD_free(Counting3, customMalloc);
+        ZSTD_free(Counting4, customMalloc);
+#endif
         return 0;
     }
     if (!maxSymbolValue) maxSymbolValue = 255;            /* 0 == default */
@@ -385,7 +423,15 @@ static size_t FSE_count_parallel(unsigned* count, unsigned* maxSymbolValuePtr,
     if (checkMax) {   /* verify stats will fit into destination table */
         U32 s; for (s=255; s>maxSymbolValue; s--) {
             Counting1[s] += Counting2[s] + Counting3[s] + Counting4[s];
-            if (Counting1[s]) return ERROR(maxSymbolValue_tooSmall);
+            if (Counting1[s]) {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+                ZSTD_free(Counting1, customMalloc);
+                ZSTD_free(Counting2, customMalloc);
+                ZSTD_free(Counting3, customMalloc);
+                ZSTD_free(Counting4, customMalloc);
+#endif
+                return ERROR(maxSymbolValue_tooSmall);
+            }
     }   }
 
     { U32 s; for (s=0; s<=maxSymbolValue; s++) {
@@ -395,6 +441,12 @@ static size_t FSE_count_parallel(unsigned* count, unsigned* maxSymbolValuePtr,
 
     while (!count[maxSymbolValue]) maxSymbolValue--;
     *maxSymbolValuePtr = maxSymbolValue;
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+        ZSTD_free(Counting1, customMalloc);
+        ZSTD_free(Counting2, customMalloc);
+        ZSTD_free(Counting3, customMalloc);
+        ZSTD_free(Counting4, customMalloc);
+#endif
     return (size_t)max;
 }
 
@@ -443,10 +495,18 @@ FSE_CTable* FSE_createCTable (unsigned maxSymbolValue, unsigned tableLog)
     size_t size;
     if (tableLog > FSE_TABLELOG_ABSOLUTE_MAX) tableLog = FSE_TABLELOG_ABSOLUTE_MAX;
     size = FSE_CTABLE_SIZE_U32 (tableLog, maxSymbolValue) * sizeof(U32);
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    return (FSE_CTable*)ZSTD_malloc(size, customMalloc);
+#else
     return (FSE_CTable*)malloc(size);
+#endif
 }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+void FSE_freeCTable (FSE_CTable* ct) { ZSTD_free(ct, customMalloc); }
+#else
 void FSE_freeCTable (FSE_CTable* ct) { free(ct); }
+#endif
 
 /* provides the minimum logSize to safely represent a distribution */
 static unsigned FSE_minTableLog(size_t srcSize, unsigned maxSymbolValue)
@@ -760,45 +820,94 @@ size_t FSE_compress2 (void* dst, size_t dstSize, const void* src, size_t srcSize
     BYTE* const ostart = (BYTE*) dst;
     BYTE* op = ostart;
     BYTE* const oend = ostart + dstSize;
+    size_t heap_return;
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    U32*   count = ZSTD_malloc(sizeof(U32) * (FSE_MAX_SYMBOL_VALUE+1), customMalloc);
+    S16*   norm = ZSTD_malloc(sizeof(S16) * (FSE_MAX_SYMBOL_VALUE+1), customMalloc);
+    FSE_CTable* ct = ZSTD_malloc(sizeof(CTable_max_t), customMalloc);
+#else
     U32   count[FSE_MAX_SYMBOL_VALUE+1];
     S16   norm[FSE_MAX_SYMBOL_VALUE+1];
     CTable_max_t ct;
+#endif
     size_t errorCode;
 
     /* init conditions */
-    if (srcSize <= 1) return 0;  /* Uncompressible */
+    if (srcSize <= 1) {
+        heap_return = 0;  /* Uncompressible */
+        goto fsec2_err;
+    }
     if (!maxSymbolValue) maxSymbolValue = FSE_MAX_SYMBOL_VALUE;
     if (!tableLog) tableLog = FSE_DEFAULT_TABLELOG;
 
     /* Scan input and build symbol stats */
     errorCode = FSE_count (count, &maxSymbolValue, ip, srcSize);
-    if (FSE_isError(errorCode)) return errorCode;
-    if (errorCode == srcSize) return 1;
-    if (errorCode == 1) return 0;   /* each symbol only present once */
-    if (errorCode < (srcSize >> 7)) return 0;   /* Heuristic : not compressible enough */
+    if (FSE_isError(errorCode)) {
+        heap_return = errorCode;
+        goto fsec2_err;
+    }
+    if (errorCode == srcSize) {
+        heap_return = 1;
+        goto fsec2_err;
+    }
+    if (errorCode == 1) {
+        heap_return = 0; /* each symbol only present once */
+        goto fsec2_err;
+    }
+    if (errorCode < (srcSize >> 7)) {
+        heap_return = 0; /* Heuristic : not compressible enough */
+        goto fsec2_err;
+    }
 
     tableLog = FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
     errorCode = FSE_normalizeCount (norm, tableLog, count, srcSize, maxSymbolValue);
-    if (FSE_isError(errorCode)) return errorCode;
+    if (FSE_isError(errorCode)) {
+        heap_return = errorCode;
+        goto fsec2_err;
+    }
 
     /* Write table description header */
     errorCode = FSE_writeNCount (op, oend-op, norm, maxSymbolValue, tableLog);
-    if (FSE_isError(errorCode)) return errorCode;
+    if (FSE_isError(errorCode)) {
+        heap_return = errorCode;
+        goto fsec2_err;
+    }
     op += errorCode;
 
     /* Compress */
     errorCode = FSE_buildCTable (ct, norm, maxSymbolValue, tableLog);
-    if (FSE_isError(errorCode)) return errorCode;
+    if (FSE_isError(errorCode)) {
+        heap_return = errorCode;
+        goto fsec2_err;
+    }
     errorCode = FSE_compress_usingCTable(op, oend - op, ip, srcSize, ct);
-    if (errorCode == 0) return 0;   /* not enough space for compressed data */
+    if (errorCode == 0) {
+        heap_return = 0; /* not enough space for compressed data */
+        goto fsec2_err;
+    }
     op += errorCode;
 
     /* check compressibility */
-    if ( (size_t)(op-ostart) >= srcSize-1 )
-        return 0;
+    if ( (size_t)(op-ostart) >= srcSize-1 ) {
+        heap_return = 0;
+        goto fsec2_err;
+    }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(count, customMalloc);
+    ZSTD_free(norm, customMalloc);
+    ZSTD_free(ct, customMalloc);
+#endif
     return op-ostart;
+
+fsec2_err:
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(count, customMalloc);
+    ZSTD_free(norm, customMalloc);
+    ZSTD_free(ct, customMalloc);
+#endif
+    return heap_return;
 }
 
 size_t FSE_compress (void* dst, size_t dstSize, const void* src, size_t srcSize)

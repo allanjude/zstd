@@ -52,6 +52,9 @@ CPPFLAGS  += -I$(ZSTDDIR)/legacy
 ZSTDLEGACY_FILES:= $(ZSTDDIR)/legacy/*.c
 endif
 
+ifeq ($(ZSTD_HEAPMODE), 1)
+CFLAGS += -DZSTD_HEAPMODE=1
+endif
 
 # Define *.exe as extension for Windows systems
 ifneq (,$(filter Windows%,$(OS)))

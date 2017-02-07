@@ -39,6 +39,9 @@ ZSTD_FILES+= legacy/*.c
 CPPFLAGS  += -I./legacy -DZSTD_LEGACY_SUPPORT=1
 endif
 
+ifeq ($(ZSTD_HEAPMODE), 1)
+CFLAGS += -DZSTD_HEAPMODE=1
+endif
 
 # OS X linker doesn't support -soname, and use different extension
 # see : https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/DynamicLibraryDesignGuidelines.html
