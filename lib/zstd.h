@@ -15,7 +15,13 @@ extern "C" {
 #endif
 
 /*======   Dependency   ======*/
+#ifdef _KERNEL
+#include <sys/param.h>  /* size_t */
+extern void *zstd_alloc(void *opaque, size_t size);
+extern void zstd_free(void *opaque, void *ptr);
+#else
 #include <stddef.h>   /* size_t */
+#endif
 
 
 /*======  Export for Windows  ======*/

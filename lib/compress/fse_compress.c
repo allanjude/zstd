@@ -65,7 +65,7 @@
 
 #if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
 #include "zstd_internal.h"  /* defaultCustomMem */
-static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, "zstd-fse-c" };
 #endif
 
 /* **************************************************************
