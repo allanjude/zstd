@@ -40,6 +40,10 @@ endif
 
 ZSTD_OBJ   := $(patsubst %.c,%.o,$(ZSTD_FILES))
 
+ifeq ($(ZSTD_HEAPMODE), 1)
+CFLAGS += -DZSTD_HEAPMODE=1
+endif
+
 # OS X linker doesn't support -soname, and use different extension
 # see : https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/DynamicLibraryDesignGuidelines.html
 ifeq ($(shell uname), Darwin)

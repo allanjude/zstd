@@ -53,6 +53,10 @@ endif
 ZSTDLIB_FILES := $(wildcard $(ZSTD_FILES)) $(wildcard $(ZSTDLEGACY_FILES)) $(wildcard $(ZDICT_FILES))
 ZSTDLIB_OBJ   := $(patsubst %.c,%.o,$(ZSTDLIB_FILES))
 
+ifeq ($(ZSTD_HEAPMODE), 1)
+CFLAGS += -DZSTD_HEAPMODE=1
+endif
+
 # Define *.exe as extension for Windows systems
 ifneq (,$(filter Windows%,$(OS)))
 EXT =.exe

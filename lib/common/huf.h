@@ -128,10 +128,17 @@ size_t HUF_compress4X_wksp (void* dst, size_t dstSize, const void* src, size_t s
 /* static allocation of HUF's DTable */
 typedef U32 HUF_DTable;
 #define HUF_DTABLE_SIZE(maxTableLog)   (1 + (1<<(maxTableLog)))
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#define HUF_CREATE_STATIC_DTABLEX2(DTable, maxTableLog) \
+        HUF_DTable* DTable = ZSTD_malloc(sizeof(HUF_DTable) * (HUF_DTABLE_SIZE((maxTableLog)-1)), customMalloc); *DTable = ((U32)((maxTableLog)-1) * 0x1000001)
+#define HUF_CREATE_STATIC_DTABLEX4(DTable, maxTableLog) \
+        HUF_DTable* DTable = ZSTD_malloc(sizeof(HUF_DTable) * (HUF_DTABLE_SIZE(maxTableLog)), customMalloc); *DTable = ((U32)(maxTableLog) * 0x1000001)
+#else
 #define HUF_CREATE_STATIC_DTABLEX2(DTable, maxTableLog) \
         HUF_DTable DTable[HUF_DTABLE_SIZE((maxTableLog)-1)] = { ((U32)((maxTableLog)-1) * 0x01000001) }
 #define HUF_CREATE_STATIC_DTABLEX4(DTable, maxTableLog) \
         HUF_DTable DTable[HUF_DTABLE_SIZE(maxTableLog)] = { ((U32)(maxTableLog) * 0x01000001) }
+#endif
 
 
 /* ****************************************

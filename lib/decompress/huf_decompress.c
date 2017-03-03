@@ -57,6 +57,10 @@
 #define HUF_STATIC_LINKING_ONLY
 #include "huf.h"
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#include "zstd_internal.h"  /* defaultCustomMem */
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 
 /* **************************************************************
 *  Error Management
@@ -446,12 +450,32 @@ static void HUF_fillDTableX4(HUF_DEltX4* DTable, const U32 targetLog,
 
 size_t HUF_readDTableX4 (HUF_DTable* DTable, const void* src, size_t srcSize)
 {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    BYTE* weightList = ZSTD_malloc((HUF_SYMBOLVALUE_MAX + 1) * sizeof(BYTE), customMalloc);
+    sortedSymbol_t* sortedSymbol = ZSTD_malloc(sizeof(sortedSymbol_t) * (HUF_SYMBOLVALUE_MAX + 1), customMalloc);
+#if 0
+    U32* rankStats = (U32 *)ZSTD_malloc(sizeof(U32) * (HUF_TABLELOG_MAX + 1), customMalloc);
+    U32* rankStart0 = (U32 *)ZSTD_malloc(sizeof(U32) * (HUF_TABLELOG_MAX + 2), customMalloc);
+    memset(rankStats, 0, (HUF_TABLELOG_MAX + 1) * sizeof(U32));
+    memset(rankStart0, 0, (HUF_TABLELOG_MAX + 2) * sizeof(U32));
+    U32** rankVal = ZSTD_malloc(sizeof(U32 *) * (HUF_TABLELOG_MAX + 1), customMalloc);
+    rankVal[0] = (U32 *)ZSTD_malloc(sizeof(U32) * (HUF_TABLELOG_MAX * (HUF_TABLELOG_MAX + 1)), customMalloc);
+    {   for (U32 i = 0; i < HUF_TABLELOG_MAX; i++) {
+	    rankVal[i] = (*rankVal + ((HUF_TABLELOG_MAX + 1) * i));
+    }   }
+#else
+    U32 rankStats[HUF_TABLELOG_MAX + 1] = { 0 };
+    U32 rankStart0[HUF_TABLELOG_MAX + 2] = { 0 };
+    rankVal_t rankVal;
+#endif
+#else
     BYTE weightList[HUF_SYMBOLVALUE_MAX + 1];
     sortedSymbol_t sortedSymbol[HUF_SYMBOLVALUE_MAX + 1];
     U32 rankStats[HUF_TABLELOG_MAX + 1] = { 0 };
     U32 rankStart0[HUF_TABLELOG_MAX + 2] = { 0 };
-    U32* const rankStart = rankStart0+1;
     rankVal_t rankVal;
+#endif
+    U32* const rankStart = rankStart0+1;
     U32 tableLog, maxW, sizeOfSort, nbSymbols;
     DTableDesc dtd = HUF_getDTableDesc(DTable);
     U32 const maxTableLog = dtd.maxTableLog;
@@ -515,12 +539,27 @@ size_t HUF_readDTableX4 (HUF_DTable* DTable, const void* src, size_t srcSize)
 
     HUF_fillDTableX4(dt, maxTableLog,
                    sortedSymbol, sizeOfSort,
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1) && (1==0)
+                   rankStart0, (U32 (*)[HUF_SYMBOLVALUE_MAX + 1])*rankVal, maxW,
+#else
                    rankStart0, rankVal, maxW,
+#endif
                    tableLog+1);
 
     dtd.tableLog = (BYTE)maxTableLog;
     dtd.tableType = 1;
     memcpy(DTable, &dtd, sizeof(dtd));
+
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(weightList, customMalloc);
+    ZSTD_free(sortedSymbol, customMalloc);
+#if 0
+    ZSTD_free(rankStats, customMalloc);
+    ZSTD_free(rankStart0, customMalloc);
+    ZSTD_free(rankVal[0], customMalloc);
+    ZSTD_free(rankVal, customMalloc);
+#endif
+#endif
     return iSize;
 }
 

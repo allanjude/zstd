@@ -51,6 +51,10 @@
 #define HUF_STATIC_LINKING_ONLY
 #include "huf.h"
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#include "zstd_internal.h"  /* defaultCustomMem */
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 
 /* **************************************************************
 *  Error Management
@@ -167,8 +171,13 @@ size_t HUF_writeCTable (void* dst, size_t maxDstSize,
 
 size_t HUF_readCTable (HUF_CElt* CTable, U32 maxSymbolValue, const void* src, size_t srcSize)
 {
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    BYTE* huffWeight = ZSTD_malloc(sizeof(BYTE) * (HUF_SYMBOLVALUE_MAX + 1), customMalloc);
+    U32* rankVal = ZSTD_malloc(sizeof(U32) * (HUF_TABLELOG_ABSOLUTEMAX + 1), customMalloc);   /* large enough for values from 0 to 16 */
+#else
     BYTE huffWeight[HUF_SYMBOLVALUE_MAX + 1];   /* init not required, even though some static analyzer may complain */
     U32 rankVal[HUF_TABLELOG_ABSOLUTEMAX + 1];   /* large enough for values from 0 to 16 */
+#endif
     U32 tableLog = 0;
     U32 nbSymbols = 0;
 
@@ -209,6 +218,10 @@ size_t HUF_readCTable (HUF_CElt* CTable, U32 maxSymbolValue, const void* src, si
         { U32 n; for (n=0; n<=maxSymbolValue; n++) CTable[n].val = valPerRank[CTable[n].nbBits]++; }
     }
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    ZSTD_free(huffWeight, customMalloc);
+    ZSTD_free(rankVal, customMalloc);
+#endif
     return readSize;
 }
 
