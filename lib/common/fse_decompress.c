@@ -63,6 +63,10 @@
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#include "zstd_internal.h"  /* defaultCustomMem */
+static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 
 /* **************************************************************
 *  Error Management
@@ -71,7 +75,7 @@
 #define FSE_STATIC_ASSERT(c) { enum { FSE_static_assert = 1/(int)(!!(c)) }; }   /* use only *after* variable declarations */
 
 /* check and forward error code */
-#define CHECK_F(f) { size_t const e = f; if (FSE_isError(e)) return e; }
+#define CHECK_FSE_F(f) { size_t const e = f; if (FSE_isError(e)) return e; }
 
 
 /* **************************************************************
@@ -98,6 +102,18 @@
 
 
 /* Function templates */
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+FSE_DTable* FSE_createDTable (unsigned tableLog)
+{
+    if (tableLog > FSE_TABLELOG_ABSOLUTE_MAX) tableLog = FSE_TABLELOG_ABSOLUTE_MAX;
+    return (FSE_DTable*)ZSTD_malloc( FSE_DTABLE_SIZE_U32(tableLog) * sizeof (U32), customMalloc );
+}
+
+void FSE_freeDTable (FSE_DTable* dt)
+{
+    ZSTD_free(dt, customMalloc);
+}
+#else
 FSE_DTable* FSE_createDTable (unsigned tableLog)
 {
     if (tableLog > FSE_TABLELOG_ABSOLUTE_MAX) tableLog = FSE_TABLELOG_ABSOLUTE_MAX;
@@ -108,6 +124,7 @@ void FSE_freeDTable (FSE_DTable* dt)
 {
     free(dt);
 }
+#endif
 
 size_t FSE_buildDTable(FSE_DTable* dt, const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
 {
@@ -231,7 +248,7 @@ FORCE_INLINE size_t FSE_decompress_usingDTable_generic(
     FSE_DState_t state2;
 
     /* Init */
-    CHECK_F(BIT_initDStream(&bitD, cSrc, cSrcSize));
+    CHECK_FSE_F(BIT_initDStream(&bitD, cSrc, cSrcSize));
 
     FSE_initDState(&state1, &bitD, dt);
     FSE_initDState(&state2, &bitD, dt);
@@ -297,7 +314,12 @@ size_t FSE_decompress_wksp(void* dst, size_t dstCapacity, const void* cSrc, size
 {
     const BYTE* const istart = (const BYTE*)cSrc;
     const BYTE* ip = istart;
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    short* counting = ZSTD_malloc((FSE_MAX_SYMBOL_VALUE+1) * sizeof(short), customMalloc);
+    size_t heap_result;
+#else
     short counting[FSE_MAX_SYMBOL_VALUE+1];
+#endif
     unsigned tableLog;
     unsigned maxSymbolValue = FSE_MAX_SYMBOL_VALUE;
 
@@ -309,9 +331,15 @@ size_t FSE_decompress_wksp(void* dst, size_t dstCapacity, const void* cSrc, size
     ip += NCountLength;
     cSrcSize -= NCountLength;
 
-    CHECK_F( FSE_buildDTable (workSpace, counting, maxSymbolValue, tableLog) );
+    CHECK_FSE_F( FSE_buildDTable (workSpace, counting, maxSymbolValue, tableLog) );
 
+#if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+    heap_result = FSE_decompress_usingDTable (dst, dstCapacity, ip, cSrcSize, workSpace);   /* always return, even if it is an error code */
+    ZSTD_free(counting, customMalloc);
+    return heap_result;
+#else
     return FSE_decompress_usingDTable (dst, dstCapacity, ip, cSrcSize, workSpace);   /* always return, even if it is an error code */
+#endif
 }
 
 
