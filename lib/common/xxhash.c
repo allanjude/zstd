@@ -97,11 +97,23 @@
 ***************************************/
 /* Modify the local functions below should you wish to use some other memory routines */
 /* for malloc(), free() */
+#ifdef _KERNEL
+#include <sys/types.h>
+extern void *zstd_alloc(void *opaque, size_t size);
+extern void zstd_free(void *opaque, void *ptr);
+static void* XXH_malloc(size_t s) { return zstd_alloc("xxh", s); }
+static void  XXH_free  (void* p)  { zstd_free("xxh", p); }
+#else
 #include <stdlib.h>
 static void* XXH_malloc(size_t s) { return malloc(s); }
 static void  XXH_free  (void* p)  { free(p); }
+#endif
 /* for memcpy() */
+#ifdef _KERNEL
+#include <sys/systm.h>
+#else
 #include <string.h>
+#endif
 static void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcpy(dest,src,size); }
 
 #ifndef XXH_STATIC_LINKING_ONLY
@@ -135,7 +147,9 @@ static void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcp
 #ifndef MEM_MODULE
 # define MEM_MODULE
 # if !defined (__VMS) && (defined (__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */) )
+#ifndef _KERNEL
 #   include <stdint.h>
+#endif
     typedef uint8_t  BYTE;
     typedef uint16_t U16;
     typedef uint32_t U32;

@@ -43,8 +43,12 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memcpy, memset */
+#else
 #include <string.h>     /* memcpy, memset */
 #include <stdio.h>      /* printf (debug) */
+#endif
 #include "bitstream.h"
 #define FSE_STATIC_LINKING_ONLY   /* FSE_optimalTableLog_internal */
 #include "fse.h"        /* header compression */
@@ -61,7 +65,7 @@ static ZSTD_customMem customMalloc = { ZSTD_defaultAllocFunction, ZSTD_defaultFr
 ****************************************************************/
 #define HUF_STATIC_ASSERT(c) { enum { HUF_static_assert = 1/(int)(!!(c)) }; }   /* use only *after* variable declarations */
 #define CHECK_V_F(e, f) size_t const e = f; if (ERR_isError(e)) return f
-#define CHECK_F(f)   { CHECK_V_F(_var_err__, f); }
+#define CHECK_HUF_F(f)   { CHECK_V_F(_var_err__, f); }
 
 
 /* **************************************************************
@@ -107,7 +111,7 @@ size_t HUF_compressWeights (void* dst, size_t dstSize, const void* weightTable, 
     }
 
     tableLog = FSE_optimalTableLog(tableLog, wtSize, maxSymbolValue);
-    CHECK_F( FSE_normalizeCount(norm, tableLog, count, wtSize, maxSymbolValue) );
+    CHECK_HUF_F( FSE_normalizeCount(norm, tableLog, count, wtSize, maxSymbolValue) );
 
     /* Write table description header */
     {   CHECK_V_F(hSize, FSE_writeNCount(op, oend-op, norm, maxSymbolValue, tableLog) );
@@ -115,7 +119,7 @@ size_t HUF_compressWeights (void* dst, size_t dstSize, const void* weightTable, 
     }
 
     /* Compress */
-    CHECK_F( FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, sizeof(scratchBuffer)) );
+    CHECK_HUF_F( FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, sizeof(scratchBuffer)) );
     {   CHECK_V_F(cSize, FSE_compress_usingCTable(op, oend - op, weightTable, wtSize, CTable) );
         if (cSize == 0) return 0;   /* not enough space for compressed data */
         op += cSize;

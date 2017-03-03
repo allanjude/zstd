@@ -75,7 +75,11 @@ extern "C" {
 /* ****************************
 *  Definitions
 ******************************/
+#ifdef _KERNEL
+#include <sys/types.h>  /* size_t */
+#else
 #include <stddef.h>   /* size_t */
+#endif
 typedef enum { XXH_OK=0, XXH_ERROR } XXH_errorcode;
 
 

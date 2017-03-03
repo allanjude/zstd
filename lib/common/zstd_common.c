@@ -12,7 +12,9 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
+#ifndef _KERNEL
 #include <stdlib.h>         /* malloc */
+#endif
 #include "error_private.h"
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"           /* declaration of ZSTD_isError, ZSTD_getErrorName, ZSTD_getErrorCode, ZSTD_getErrorString, ZSTD_versionNumber */
@@ -50,15 +52,23 @@ const char* ZSTD_getErrorString(ZSTD_ErrorCode code) { return ERR_getErrorString
 /* default uses stdlib */
 void* ZSTD_defaultAllocFunction(void* opaque, size_t size)
 {
+#ifdef _KERNEL
+    void* address = zstd_alloc(opaque, size);
+#else
     void* address = malloc(size);
     (void)opaque;
+#endif
     return address;
 }
 
 void ZSTD_defaultFreeFunction(void* opaque, void* address)
 {
+#ifdef _KERNEL
+    zstd_free(opaque, address);
+#else
     (void)opaque;
     free(address);
+#endif
 }
 
 void* ZSTD_malloc(size_t size, ZSTD_customMem customMem)

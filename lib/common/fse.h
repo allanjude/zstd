@@ -42,7 +42,11 @@ extern "C" {
 /*-*****************************************
 *  Dependencies
 ******************************************/
+#ifdef _KERNEL
+#include <sys/param.h> /* size_t, ptrdiff_t */
+#else
 #include <stddef.h>    /* size_t, ptrdiff_t */
+#endif
 
 
 /*-*****************************************

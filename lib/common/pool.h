@@ -14,7 +14,11 @@ extern "C" {
 #endif
 
 
+#ifdef _KERNEL
+#include <sys/types.h>
+#else
 #include <stddef.h>   /* size_t */
+#endif
 
 typedef struct POOL_ctx_s POOL_ctx;
 

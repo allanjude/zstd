@@ -17,8 +17,13 @@ extern "C" {
 /*-****************************************
 *  Dependencies
 ******************************************/
+#ifdef _KERNEL
+#include <sys/types.h>  /* size_t */
+#include <sys/systm.h>  /* memcpy */
+#else
 #include <stddef.h>     /* size_t, ptrdiff_t */
 #include <string.h>     /* memcpy */
+#endif
 
 
 /*-****************************************
@@ -47,7 +52,9 @@ MEM_STATIC void MEM_check(void) { MEM_STATIC_ASSERT((sizeof(size_t)==4) || (size
 *  Basic Types
 *****************************************************************/
 #if  !defined (__VMS) && (defined (__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */) )
+#ifndef _KERNEL
 # include <stdint.h>
+#endif
   typedef  uint8_t BYTE;
   typedef uint16_t U16;
   typedef  int16_t S16;

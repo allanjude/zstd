@@ -51,7 +51,11 @@
 /* **************************************************************
 *  Dependencies
 ****************************************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memcpy, memset */
+#else
 #include <string.h>     /* memcpy, memset */
+#endif
 #include "bitstream.h"  /* BIT_* */
 #include "fse.h"        /* header compression */
 #define HUF_STATIC_LINKING_ONLY

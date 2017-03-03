@@ -9,8 +9,13 @@
 
 
 /* ======   Dependencies   ======= */
+#ifdef _KERNEL
+#include <sys/types.h>
+#include <sys/systm.h>
+#else
 #include <stddef.h>  /* size_t */
 #include <stdlib.h>  /* malloc, calloc, free */
+#endif
 #include "pool.h"
 
 /* ======   Compiler specifics   ====== */

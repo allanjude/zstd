@@ -40,7 +40,11 @@ extern "C" {
 
 
 /* *** Dependencies *** */
+#ifdef _KERNEL
+#include <sys/types.h>     /* size_t */
+#else
 #include <stddef.h>    /* size_t */
+#endif
 
 
 /* *** simple functions *** */

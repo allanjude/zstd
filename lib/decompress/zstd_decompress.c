@@ -41,7 +41,11 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memcpy, memset */
+#else
 #include <string.h>      /* memcpy, memmove, memset */
+#endif
 #include "mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"

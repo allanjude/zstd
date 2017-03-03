@@ -56,9 +56,13 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memcpy, memset */
+#else
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
 #include <stdio.h>      /* printf (debug) */
+#endif
 #include "bitstream.h"
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"
@@ -807,7 +811,7 @@ size_t FSE_compress_usingCTable (void* dst, size_t dstSize,
 size_t FSE_compressBound(size_t size) { return FSE_COMPRESSBOUND(size); }
 
 #define CHECK_V_F(e, f) size_t const e = f; if (ERR_isError(e)) return f
-#define CHECK_F(f)   { CHECK_V_F(_var_err__, f); }
+#define CHECK_FSE_F(f)   { CHECK_V_F(_var_err__, f); }
 
 /* FSE_compress_wksp() :
  * Same as FSE_compress2(), but using an externally allocated scratch buffer (`workSpace`).
@@ -818,7 +822,6 @@ size_t FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t src
     BYTE* const ostart = (BYTE*) dst;
     BYTE* op = ostart;
     BYTE* const oend = ostart + dstSize;
-    size_t heap_return;
 
 #if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
     U32*   count = ZSTD_malloc(sizeof(U32) * (FSE_MAX_SYMBOL_VALUE+1), customMalloc);
@@ -863,7 +866,7 @@ size_t FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t src
     }
 
     tableLog = FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
-    CHECK_F( FSE_normalizeCount(norm, tableLog, count, srcSize, maxSymbolValue) );
+    CHECK_FSE_F( FSE_normalizeCount(norm, tableLog, count, srcSize, maxSymbolValue) );
 
     /* Write table description header */
     {   CHECK_V_F(nc_err, FSE_writeNCount(op, oend-op, norm, maxSymbolValue, tableLog) );
@@ -871,7 +874,7 @@ size_t FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t src
     }
 
     /* Compress */
-    CHECK_F( FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, scratchBufferSize) );
+    CHECK_FSE_F( FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, scratchBufferSize) );
     {   CHECK_V_F(cSize, FSE_compress_usingCTable(op, oend - op, src, srcSize, CTable) );
         if (cSize == 0) return 0;   /* not enough space for compressed data */
         op += cSize;

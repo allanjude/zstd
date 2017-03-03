@@ -11,7 +11,11 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memcpy, memset */
+#else
 #include <string.h>         /* memset */
+#endif
 #include "mem.h"
 #define FSE_STATIC_LINKING_ONLY   /* FSE_encodeSymbol */
 #include "fse.h"
@@ -583,8 +587,13 @@ size_t ZSTD_compressSequences(ZSTD_CCtx* zc,
 {
     const seqStore_t* seqStorePtr = &(zc->seqStore);
 #if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#if 0 /* XXX: Use after free here... */
     U32* count = ZSTD_malloc((MaxSeq+1) * sizeof(U32), zc->customMem);
     S16* norm = ZSTD_malloc((MaxSeq+1) * sizeof(S16), zc->customMem);
+#else
+    U32 count[MaxSeq+1];
+    S16 norm[MaxSeq+1];
+#endif /* use after free */
 #else
     U32 count[MaxSeq+1];
     S16 norm[MaxSeq+1];
@@ -764,8 +773,10 @@ _check_compressibility:
     { int i; for (i=0; i<ZSTD_REP_NUM; i++) zc->rep[i] = zc->repToConfirm[i]; }
 
 #if defined(ZSTD_HEAPMODE) && (ZSTD_HEAPMODE==1)
+#if 0
     ZSTD_free(count, zc->customMem);
     ZSTD_free(norm, zc->customMem);
+#endif
 #endif
     return op - ostart;
 }

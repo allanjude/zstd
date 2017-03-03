@@ -57,8 +57,12 @@
 /* **************************************************************
 *  Includes
 ****************************************************************/
+#ifdef _KERNEL
+#include <sys/systm.h>  /* memset */
+#else
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
+#endif
 #include "bitstream.h"
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"

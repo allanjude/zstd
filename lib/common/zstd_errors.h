@@ -15,7 +15,11 @@ extern "C" {
 #endif
 
 /*===== dependency =====*/
+#ifdef _KERNEL
+#include <sys/types.h>  /* size_t */
+#else
 #include <stddef.h>   /* size_t */
+#endif
 
 
 /* =====   ZSTDERRORLIB_API : control library symbols visibility   ===== */
